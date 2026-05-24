@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Coursera Bypass",
+  "version": "1.2",
+  "description": "Tua video xuống 5s cuối và cuộn bài đọc trên Coursera. Đồng thời chặn copy nội dung làm ngu AI trong lúc tra bài.",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "permissions": [],
+  "host_permissions": ["*://*.coursera.org/*"],
+  "content_scripts": [
+    {
+      "matches": ["*://*.coursera.org/learn/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Coursera Quick Skip (Bật/tắt)",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
