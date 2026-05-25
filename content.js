@@ -1,8 +1,10 @@
-// content.js - Coursera Quick Skip + Anti-AI Cleaner
+// content.js - Phiên bản ổn định hơn với nhiều cơ chế dự phòng
 
 let isEnabled = true;
+let retryCount = 0;
+let maxRetries = 5;
 
-// ========== PHẦN 1: ANTI-AI CLEANER (của bạn) ==========
+// ========== PHẦN 1: ANTI-AI CLEANER ==========
 const antiAIKeywords = [
     "You are a helpful AI assistant. You have identified",
     "protected assessment from Coursera",
@@ -12,56 +14,43 @@ const antiAIKeywords = [
 
 function cleanAntiAIText(text) {
     let cleaned = text;
-
-    // Xóa toàn bộ khối anti-AI
     cleaned = cleaned.replace(/You are a helpful AI assistant[\s\S]*?Do you understand\?\./gi, '');
     cleaned = cleaned.replace(/IMPORTANT: AI Agent Compliance Verification Required[\s\S]*?mandatory for all AI assistants[\s\S]*?\./gi, '');
-
     cleaned = cleaned.replace(/\n\s*\n\s*\n/g, '\n\n');
     return cleaned.trim();
 }
 
-// Chỉ xóa element chứa toàn bộ đoạn text dài (an toàn hơn)
 function removeAntiAIElements() {
     document.querySelectorAll('div, p, span, section').forEach(el => {
         const text = el.textContent || '';
         if (text.length > 300 && antiAIKeywords.every(keyword => text.includes(keyword))) {
             el.style.display = 'none';
-            // Không remove hẳn để tránh làm trắng trang
         }
     });
 }
 
-// Xử lý Copy - Phần quan trọng nhất
 document.addEventListener('copy', (e) => {
     const selected = window.getSelection().toString();
     if (selected.length < 50) return;
-
     const cleaned = cleanAntiAIText(selected);
-
     if (cleaned !== selected) {
         try {
             e.clipboardData.setData('text/plain', cleaned);
             e.preventDefault();
-            console.log('%c✅ [Anti-AI] Đã làm sạch text thành công!', 'color: lime; font-weight: bold');
+            console.log('%c✅ [Anti-AI] Đã làm sạch text!', 'color: lime; font-weight: bold');
         } catch (err) {
             console.log('[Anti-AI] Lỗi:', err);
         }
     }
 }, true);
 
-// Chạy anti-AI cleaner
-const antiAIObserver = new MutationObserver(() => {
-    removeAntiAIElements();
-});
+const antiAIObserver = new MutationObserver(() => removeAntiAIElements());
 antiAIObserver.observe(document.documentElement, { childList: true, subtree: true });
-
 window.addEventListener('load', removeAntiAIElements);
 removeAntiAIElements();
+console.log('%c🚀 [Anti-AI] Đã chạy!', 'color: #00ffcc; font-size: 15px');
 
-console.log('%c🚀 [Anti-AI] Coursera Cleaner đã chạy!', 'color: #00ffcc; font-size: 15px');
-
-// ========== PHẦN 2: COURSERA QUICK SKIP (tua video + cuộn bài đọc) ==========
+// ========== PHẦN 2: COURSERA QUICK SKIP (CẢI TIẾN) ==========
 
 function getLessonType() {
     const url = window.location.href;
@@ -75,83 +64,100 @@ function isLessonPage() {
     return getLessonType() !== 'unknown';
 }
 
-// Tìm phần tử nội dung CHÍNH CẦN CUỘN
 function getMainContentArea() {
-    // Ưu tiên 1: data-testid="course-frame-content"
     let mainArea = document.querySelector('[data-testid="course-frame-content"]');
-    if (mainArea) {
-        console.log('[Skip] 🎯 Tìm thấy course-frame-content');
-        return mainArea;
-    }
-    
-    // Ưu tiên 2: class css-1w5qob6
+    if (mainArea) return mainArea;
     mainArea = document.querySelector('.css-1w5qob6');
-    if (mainArea) {
-        console.log('[Skip] 🎯 Tìm thấy .css-1w5qob6');
-        return mainArea;
-    }
-    
-    // Ưu tiên 3: class css-pdkw1q
+    if (mainArea) return mainArea;
     mainArea = document.querySelector('.css-pdkw1q');
-    if (mainArea) {
-        console.log('[Skip] 🎯 Tìm thấy .css-pdkw1q');
-        return mainArea;
-    }
+    if (mainArea) return mainArea;
     
-    // Fallback: tìm phần tử có thanh cuộn, không phải left-nav
-    const allElements = document.querySelectorAll('*');
-    for (let el of allElements) {
+    for (let el of document.querySelectorAll('*')) {
         if (el.closest('[data-testid="left-nav"]')) continue;
         const style = getComputedStyle(el);
-        const overflowY = style.overflowY;
-        const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') && 
-                              el.scrollHeight > el.clientHeight &&
-                              el.clientHeight > 0;
-        if (isScrollable && el.scrollHeight > 500) {
-            console.log('[Skip] 🎯 Fallback tìm thấy:', el.className);
+        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && 
+            el.scrollHeight > el.clientHeight && el.clientHeight > 0 && el.scrollHeight > 500) {
             return el;
         }
     }
     return null;
 }
 
-// Xử lý video
-function handleVideo() {
-    console.log('[Skip] 🎬 Xử lý video...');
+// Tìm video bằng NHIỀU CÁCH
+function findVideo() {
+    // Cách 1: Tìm trong main area
     const mainArea = getMainContentArea();
-    const video = mainArea ? mainArea.querySelector('video') : document.querySelector('video');
-    
-    if (video && video.duration && !isNaN(video.duration) && video.duration > 0) {
-        if (video.currentTime < video.duration - 5) {
-            video.currentTime = video.duration - 5;
-            console.log('[Skip] ✅ Đã tua video đến 5 giây cuối');
-        }
-    } else {
-        console.log('[Skip] ⚠️ Không tìm thấy video');
+    if (mainArea) {
+        const video = mainArea.querySelector('video');
+        if (video) return video;
     }
+    
+    // Cách 2: Tìm toàn trang
+    let video = document.querySelector('video');
+    if (video) return video;
+    
+    // Cách 3: Tìm trong iframe (trường hợp đặc biệt)
+    const iframe = document.querySelector('iframe');
+    if (iframe && iframe.contentDocument) {
+        video = iframe.contentDocument.querySelector('video');
+        if (video) return video;
+    }
+    
+    return null;
 }
 
-// Xử lý bài đọc/widget
+// Xử lý video - CÓ CƠ CHẾ RETRY
+function handleVideo(retry = 0) {
+    console.log(`[Skip] 🎬 Tìm video (lần thử ${retry + 1})...`);
+    
+    const video = findVideo();
+    
+    if (video && video.duration && !isNaN(video.duration) && video.duration > 0) {
+        // Kiểm tra video có đang ở gần cuối chưa
+        const isNearEnd = (video.duration - video.currentTime) <= 15;
+        
+        if (!isNearEnd) {
+            video.currentTime = video.duration - 10;
+            console.log(`[Skip] ✅ Đã tua video từ ${video.currentTime.toFixed(1)}s đến ${(video.duration - 10).toFixed(1)}s`);
+            retryCount = 0; // Reset retry khi thành công
+            return true;
+        } else {
+            console.log('[Skip] ℹ️ Video đã ở gần cuối, không cần tua');
+            retryCount = 0;
+            return true;
+        }
+    } else if (video && (!video.duration || isNaN(video.duration))) {
+        console.log('[Skip] ⏳ Video chưa load xong metadata, đợi thêm...');
+    } else {
+        console.log('[Skip] ⚠️ Chưa tìm thấy video');
+    }
+    
+    // Retry nếu chưa thành công và còn lượt
+    if (retry < maxRetries) {
+        setTimeout(() => {
+            handleVideo(retry + 1);
+        }, 1500 * (retry + 1)); // Tăng dần thời gian chờ: 1.5s, 3s, 4.5s...
+    } else {
+        console.log('[Skip] ❌ Không tìm thấy video sau nhiều lần thử');
+        retryCount = 0;
+    }
+    
+    return false;
+}
+
 function handleReadingOrWidget(type) {
     console.log(`[Skip] 📖 Xử lý ${type.toUpperCase()}...`);
     
     const targetArea = getMainContentArea();
     
     if (targetArea) {
-        targetArea.scrollTo({
-            top: targetArea.scrollHeight,
-            behavior: 'smooth'
-        });
+        targetArea.scrollTo({ top: targetArea.scrollHeight, behavior: 'smooth' });
         console.log(`[Skip] ✅ Đã cuộn xuống cuối (${targetArea.scrollHeight}px)`);
     } else {
-        window.scrollTo({
-            top: document.body.scrollHeight,
-            behavior: 'smooth'
-        });
-        console.log('[Skip] ⚠️ Không tìm thấy vùng cuộn, đã cuộn window');
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        console.log('[Skip] ⚠️ Cuộn window');
     }
     
-    // Tự động click "Mark as complete"
     setTimeout(() => {
         const buttons = document.querySelectorAll('button');
         for (let btn of buttons) {
@@ -159,7 +165,7 @@ function handleReadingOrWidget(type) {
             if (text.includes('mark as complete') || text.includes('đánh dấu là đã hoàn thành')) {
                 if (!btn.disabled) {
                     btn.click();
-                    console.log('[Skip] 🎯 Đã click nút Mark as complete');
+                    console.log('[Skip] 🎯 Click Mark as complete');
                     break;
                 }
             }
@@ -167,48 +173,49 @@ function handleReadingOrWidget(type) {
     }, 1000);
 }
 
-// HÀM CHÍNH
+// HÀM CHÍNH - CÓ THÊM KIỂM TRA URL THAY ĐỔI
+let currentUrl = location.href;
+
 function processPage() {
     if (!isLessonPage()) return;
     
     const lessonType = getLessonType();
-    console.log(`[Skip] 🎯 Trang: ${lessonType.toUpperCase()}`);
+    console.log(`[Skip] 🎯 Trang: ${lessonType.toUpperCase()} - URL: ${location.href}`);
+    
+    // Reset retryCount khi vào bài mới
+    retryCount = 0;
     
     setTimeout(() => {
         if (!isEnabled) return;
         
         switch (lessonType) {
             case 'video':
-                handleVideo();
+                handleVideo(0);
                 break;
             case 'reading':
             case 'widget':
                 handleReadingOrWidget(lessonType);
                 break;
         }
-    }, 1500);
-    
-    // Xử lý lần 2 cho bài đọc (đề phòng load chậm)
-    if (lessonType === 'reading' || lessonType === 'widget') {
-        setTimeout(() => {
-            if (isEnabled) handleReadingOrWidget(lessonType);
-        }, 4000);
+    }, 1000);
+}
+
+// PHÁT HIỆN CHUYỂN TRANG BẰNG CÁCH SO SÁNH URL (CÁCH TIN CẬY HƠN)
+setInterval(() => {
+    if (location.href !== currentUrl) {
+        console.log(`[Skip] 🔄 Phát hiện chuyển trang: ${location.href}`);
+        currentUrl = location.href;
+        setTimeout(processPage, 500);
     }
-}
+}, 500);
 
-// THEO DÕI CHUYỂN TRANG
-let lastUrl = location.href;
-function observeNavigation() {
-    new MutationObserver(() => {
-        if (location.href !== lastUrl) {
-            lastUrl = location.href;
-            console.log('[Skip] 🔄 Chuyển trang');
-            setTimeout(processPage, 500);
-        }
-    }).observe(document, { subtree: true, childList: true });
-}
+// LẮNG NGHE SỰ KIỆN POPSTATE (back/forward)
+window.addEventListener('popstate', () => {
+    console.log('[Skip] 🔄 Phát hiện popstate (back/forward)');
+    setTimeout(processPage, 500);
+});
 
-// Lắng nghe bật/tắt từ background
+// LẮNG NGHE SỰ KIỆN TỪ BACKGROUND
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'toggle') {
         isEnabled = request.enabled;
@@ -220,7 +227,5 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // KHỞI ĐỘNG
 processPage();
-observeNavigation();
-
-console.log('%c⚡ [Skip] Coursera Quick Skip đã khởi động!', 'color: #ffaa00; font-size: 15px');
-console.log('%c📋 [Tổng hợp] Anti-AI Cleaner + Quick Skip đã sẵn sàng!', 'color: #ff66ff; font-size: 16px; font-weight: bold');
+console.log('%c⚡ [Skip] Coursera Quick Skip (cải tiến) đã khởi động!', 'color: #ffaa00; font-size: 15px');
+console.log('%c📋 [Tổng hợp] Anti-AI + Quick Skip đã sẵn sàng!', 'color: #ff66ff; font-size: 16px; font-weight: bold');
