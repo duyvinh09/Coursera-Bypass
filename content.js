@@ -117,8 +117,8 @@ function handleVideo(retry = 0) {
         const isNearEnd = (video.duration - video.currentTime) <= 15;
         
         if (!isNearEnd) {
-            video.currentTime = video.duration - 10;
-            console.log(`[Skip] ✅ Đã tua video từ ${video.currentTime.toFixed(1)}s đến ${(video.duration - 10).toFixed(1)}s`);
+            video.currentTime = video.duration - 5; // Tua đến 5 giây cuối
+            console.log(`[Skip] ✅ Đã tua video từ ${video.currentTime.toFixed(1)}s đến ${(video.duration - 5).toFixed(1)}s`);
             retryCount = 0; // Reset retry khi thành công
             return true;
         } else {
@@ -173,6 +173,86 @@ function handleReadingOrWidget(type) {
     }, 1000);
 }
 
+// ========== PHẦN 3: AUTO NEXT LESSON (CHUYỂN BÀI KHI NÚT XANH) ==========
+
+function findNextButton() {
+    // Tìm theo aria-label chính xác
+    const buttons = document.querySelectorAll('button[aria-label="Chuyển đến mục tiếp theo"]');
+    for (const btn of buttons) {
+        // Ưu tiên nút có class primary (màu xanh) - đây là nút enabled
+        if (btn.classList.contains('cds-button-primary')) {
+            return btn;
+        }
+    }
+    return null;
+}
+
+function isNextButtonEnabled() {
+    const btn = findNextButton();
+    return btn !== null && !btn.disabled;
+}
+
+function clickNextButton() {
+    const btn = findNextButton();
+    if (btn && !btn.disabled) {
+        btn.click();
+        console.log('%c➡️ [Next] Đã click "Chuyển đến mục tiếp theo" (nút xanh)', 'color: #00ccff; font-weight: bold');
+        return true;
+    }
+    return false;
+}
+
+// Theo dõi nút next — khi nó chuyển từ xám sang xanh thì tự click
+let nextObserver = null;
+let nextClickTimer = null;
+
+function startNextWatcher() {
+    if (nextObserver) nextObserver.disconnect();
+    if (nextClickTimer) clearInterval(nextClickTimer);
+
+    // Cách 1: MutationObserver theo dõi thay đổi class
+    nextObserver = new MutationObserver(() => {
+        if (!isEnabled) return;
+        if (isNextButtonEnabled()) {
+            console.log('[Next] 🔔 Phát hiện nút next đã xanh!');
+            // Đợi 1 chút để Coursera ổn định state
+            setTimeout(() => {
+                if (isEnabled && isNextButtonEnabled()) {
+                    clickNextButton();
+                }
+            }, 800);
+        }
+    });
+
+    nextObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'disabled']
+    });
+
+    // Cách 2: Polling dự phòng mỗi 1.5s (đề phòng observer bỏ sót)
+    nextClickTimer = setInterval(() => {
+        if (!isEnabled) return;
+        if (isNextButtonEnabled()) {
+            console.log('[Next] 🔁 Polling: nút next đã xanh');
+            if (clickNextButton()) {
+                // Ngừng poll tạm thời sau khi click để tránh click liên tục
+                clearInterval(nextClickTimer);
+                nextClickTimer = null;
+            }
+        }
+    }, 1500);
+
+    console.log('[Next] 👀 Đã bật theo dõi nút "Chuyển đến mục tiếp theo"');
+}
+
+function stopNextWatcher() {
+    if (nextObserver) { nextObserver.disconnect(); nextObserver = null; }
+    if (nextClickTimer) { clearInterval(nextClickTimer); nextClickTimer = null; }
+    console.log('[Next] ⏹️ Đã tắt theo dõi nút next');
+}
+
 // HÀM CHÍNH - CÓ THÊM KIỂM TRA URL THAY ĐỔI
 let currentUrl = location.href;
 
@@ -182,11 +262,13 @@ function processPage() {
     const lessonType = getLessonType();
     console.log(`[Skip] 🎯 Trang: ${lessonType.toUpperCase()} - URL: ${location.href}`);
     
-    // Reset retryCount khi vào bài mới
     retryCount = 0;
     
     setTimeout(() => {
         if (!isEnabled) return;
+        
+        // Bật theo dõi nút next cho MỌI loại bài
+        startNextWatcher();
         
         switch (lessonType) {
             case 'video':
@@ -218,9 +300,13 @@ window.addEventListener('popstate', () => {
 // LẮNG NGHE SỰ KIỆN TỪ BACKGROUND
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'toggle') {
-        isEnabled = request.enabled;
+        isEnabled = !isEnabled; // đảo trạng thái
         console.log(`[Skip] Trạng thái: ${isEnabled ? 'BẬT' : 'TẮT'}`);
-        if (isEnabled) processPage();
+        if (isEnabled) {
+            processPage();
+        } else {
+            stopNextWatcher();
+        }
     }
     sendResponse({ status: 'ok' });
 });
