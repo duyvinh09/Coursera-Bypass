@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Coursera Bypass",
-  "version": "1.3",
-  "description": "Tua video xuống 5s cuối và cuộn bài đọc trên Coursera. Đồng thời chặn copy nội dung làm ngu AI trong lúc tra bài.",
+  "version": "1.5",
+  "description": "Tua video, tự chuyển bài, bắt đầu bài tập và tích ô đồng ý. Khi copy chỉ giữ đề, lựa chọn và code.",
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",
