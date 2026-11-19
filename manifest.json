@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Coursera Bypass",
-  "version": "1.5",
+  "version": "1.4",
   "description": "Tua video, tự chuyển bài, bắt đầu bài tập và tích ô đồng ý. Khi copy chỉ giữ đề, lựa chọn và code.",
   "icons": {
     "16": "icon16.png",
